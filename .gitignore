@@ -1,0 +1,10 @@
+*.iml
+*.xml
+*.pyc
+results/*
+array_mapper.egg-info/*
+build/*
+/tests/*.html
+/tests/*.out
+.vscode/launch.json
+
