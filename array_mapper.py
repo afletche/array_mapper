@@ -147,7 +147,8 @@ class MappedArray:
         raise Exception("Sorry, this is not implemented yet. This will eventually be implemented for scalar multiplication.")
 
     def reshape(self, newshape):
-        self.shape = newshape
+        new_array = MappedArray(input=self.input, linear_map=self.linear_map, offset=self.offset_map, shape=newshape)
+        return new_array
 
     def evaluate(self, input=None):
         if input is not None:
@@ -164,7 +165,6 @@ class MappedArray:
         self.value = self.value.reshape(self.shape)
 
         return self.value
-
 
 
 def dot(map, input, offset=None):
@@ -282,7 +282,8 @@ def linear_combination(start, stop, num_steps=50, start_weights=None, stop_weigh
     if num_steps is not None and start_weights is None and stop_weights is None:
         linspace(start, stop, num_steps, combine_input, offset)
 
-    num_per_step = start.value.shape[0]
+    # num_per_step = start.value.shape[0]
+    num_per_step = _num_elements(start.value)
     map_num_outputs = num_steps*num_per_step
     map_num_inputs = num_per_step
     map_start = sps.lil_array((map_num_outputs, map_num_inputs))
@@ -298,8 +299,10 @@ def linear_combination(start, stop, num_steps=50, start_weights=None, stop_weigh
     map_start = map_start.tocsc()
     map_stop = map_stop.tocsc()
 
-    mapped_start_array = dot(map_start, start)
-    mapped_stop_array = dot(map_stop, stop)
+    flattened_start = start.reshape((num_per_step, -1))
+    flattened_stop = stop.reshape((num_per_step, -1))
+    mapped_start_array = dot(map_start, flattened_start)
+    mapped_stop_array = dot(map_stop, flattened_stop)
     
     if combine_input is None:
         combine_input = _check_whether_to_combine_inputs(start, stop)
@@ -371,7 +374,10 @@ def linspace(start, stop, num_steps=50, combine_input=None, offset=None):
 
 
 def _num_elements(x):
-    return np.cumprod(x.shape[:-1])[-1]
+    if len(x.shape) == 1 :
+        return 1
+    else:
+        return np.cumprod(x.shape[:-1])[-1]
 
 def _arrays_are_equal(a, b):
     difference = a - b
