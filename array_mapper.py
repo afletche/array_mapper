@@ -57,6 +57,9 @@ class MappedArray:
             self.input = input.input
             self.value = input.value
 
+        if self.linear_map is None and self.input is not None:
+            self.linear_map = sps.eye(self.input.shape[0])
+
         if type(shape) is list or type(shape) is tuple:
             self.shape = shape
 
@@ -68,83 +71,50 @@ class MappedArray:
     def __repr__(self):
         return f'array_mapper.MappedArray(input={self.input}, linear_map={self.linear_map}, offset={self.offset_map}, shape={self.shape})'
 
-    
+    def __pos__(self):
+        return self
+
+    def __neg__(self):
+        map = None
+        offset = None
+        input = self.input
+        if self.linear_map is not None:
+            map = -self.linear_map
+        else:
+            input = -self.input
+
+        if self.offset_map is not None:
+            offset = -self.offset_map
+
+        return array(input=input, linear_map=map, offset=offset, shape=self.shape)
+
     def __add__(self, x2):
-        # TODO Add magic method for minus sign so this can be addition.
-        # TODO Think about dillema on whether to combine inputs or not for magic methods. Probably use default?
-        # -- right now, it's assuming same/combined input
+        return add(self, x2)
 
-        map = self.linear_map
-        offset_map = self.offset_map
-
-        if type(x2) is MappedArray:
-            if self.linear_map is not None and x2.linear_map is not None:
-                map = self.linear_map + x2.linear_map
-            # elif self.linear_map is not None: This is already default
-            #     map = self.linear_map
-            elif x2.linear_map is not None:
-                map = x2.linear_map
-
-            if self.offset_map is not None:
-                if x2.offset_map is None and x2.input is not None:
-                    offset_map = self.offset_map + x2.input
-                elif x2.offset_map is not None:
-                    offset_map = self.offset_map + x2.offset_map
-            else:
-                if x2.offset_map is None and x2.input is not None:
-                    offset_map = x2.input
-                elif x2.offset_map is not None:
-                    offset_map = x2.offset_map
-
-        elif type(x2) is np.ndarray:
-            if self.offset_map is not None:
-                offset_map = self.offset_map + x2
-            else:
-                offset_map = x2
-
-        new_array = array(input=self.input, linear_map=map, offset=offset_map, shape=self.shape)
-
-        return new_array
+    def __radd__(self, x1):
+        return add(self, x1)
 
     def __sub__(self, x2):
-        # TODO Add magic method for minus sign so this can be addition.
-        # TODO Think about dillema on whether to combine inputs or not for magic methods. Probably use default?
-        # -- right now, it's assuming same/combined input
+        return add(self, -x2)
 
-        map = self.linear_map
-        offset_map = self.offset_map
+    def __rsub__(self, x1):
+        return add(-self, x1)
 
-        if type(x2) is MappedArray:
-            if self.linear_map is not None and x2.linear_map is not None:
-                map = self.linear_map - x2.linear_map
-            # elif self.linear_map is not None: This is already default
-            #     map = self.linear_map
-            elif x2.linear_map is not None:
-                map = -x2.linear_map
+    def __mul__(self, alpha):
+        map = None
+        offset = None
+        if self.linear_map is not None:
+            map = alpha*self.linear_map
+        if self.offset_map is not None:
+            offset = alpha*self.offset_map
 
-            if self.offset_map is not None:
-                if x2.offset_map is None and x2.input is not None:
-                    offset_map = self.offset_map - x2.input
-                elif x2.offset_map is not None:
-                    offset_map = self.offset_map - x2.offset_map
-            else:
-                if x2.offset_map is None and x2.linear_map is None and x2.input is not None:
-                    offset_map = -x2.input
-                elif x2.offset_map is not None:
-                    offset_map = -x2.offset_map
+        return array(input=self.input, linear_map=map, offset=offset, shape=self.shape)
 
-        elif type(x2) is np.ndarray:
-            if self.offset_map is not None:
-                offset_map = self.offset_map - x2
-            else:
-                offset_map = -x2
+    def __rmul__(self, alpha):
+        return self.__mul__(alpha)
 
-        new_array = array(input=self.input, linear_map=map, offset=offset_map, shape=self.shape)
-
-        return new_array
-
-    def __mul__(self, x2):
-        raise Exception("Sorry, this is not implemented yet. This will eventually be implemented for scalar multiplication.")
+    def __truediv__(self, alpha):
+        return self.__mul__(1/alpha)
 
     def reshape(self, newshape):
         new_array = MappedArray(input=self.input, linear_map=self.linear_map, offset=self.offset_map, shape=newshape)
@@ -152,7 +122,11 @@ class MappedArray:
 
     def evaluate(self, input=None):
         if input is not None:
-            self.input = input
+            if type(input) is MappedArray:
+                new_array = dot(self.linear_map, input, offset=self.offset_map)
+                return new_array.value
+            else:
+                self.input = input
         if self.linear_map is not None and self.offset_map is not None:
             self.value = self.linear_map.dot(self.input) + self.offset_map
         elif self.linear_map is not None:
@@ -165,6 +139,93 @@ class MappedArray:
         self.value = self.value.reshape(self.shape)
 
         return self.value
+
+
+def add(x1, x2, combine_input:bool=None):
+    '''
+    Adds the two arguments.
+
+    Parameters
+    -----------
+    x1: array_like
+        The first argument being added
+    x2: array_like
+        The second argument being added
+    combine_input: bool
+        If both arguments are MappedArrays, this boolean determines whether
+        the output MappedArray should stack the inputs of x1 and x2 as its
+        input (False), or whether the output MappedArray should use the same
+        input (True). None option automatically detects if arguments share
+        same input. If so, inputs are combined.
+    '''
+    if type(x1) is not MappedArray and type(x2) is not MappedArray:
+        return x1 + x2
+    elif type(x1) is not MappedArray:
+        return add(x2=x2, x1=x1, combine_input=combine_input)
+
+    map = None
+    offset_map = None
+    input = None
+
+    if type(x2) is MappedArray:
+        combine_input = _check_whether_to_combine_inputs(x1, x2)
+
+        # if x1.linear_map is not None and x2.linear_map is not None:
+        if combine_input:
+            map = x1.linear_map + x2.linear_map
+        else:
+            if type(x1.linear_map) is np.ndarray or x2.linear_map is np.ndarray:
+                map = np.hstack((x1.linear_map, x2.linear_map))
+            else:
+                map = sps.hstack((x1.linear_map, x2.linear_map))
+                map = map.tocsc()
+
+        if x1.offset_map is not None and x2.offset_map is not None:
+            offset_map = x1.offset_map + x2.offset_map
+        elif x1.offset_map is not None:
+            offset_map = x1.offset_map
+        elif x2.offset_map is not None:
+            offset_map = x2.offset_map
+
+        if combine_input:
+            input = x1.input
+        else:
+            if len(x1.input.shape) == 1:
+                input = np.append(x1.input, x2.input)
+            else:
+                input = np.vstack((x1.input, x2.input))
+
+    elif type(x2) is np.ndarray or type(x2) is int or type(x2) is float:
+        map = x1.linear_map
+        input = x1.input
+        if x1.offset_map is not None:
+            offset_map = x1.offset_map + x2
+        else:
+            offset_map = x2
+
+    new_array = array(input=input, linear_map=map, offset=offset_map, shape=x1.shape)
+
+    return new_array
+
+
+def subtract(x1, x2, combine_inputs:bool=None):
+    '''
+    Adds the two arguments.
+
+    Parameters
+    -----------
+    x1: array_like
+        The first argument being added
+    x2: array_like
+        The second argument being added
+    combine_input: bool
+        If both arguments are MappedArrays, this boolean determines whether
+        the output MappedArray should stack the inputs of x1 and x2 as its
+        input (False), or whether the output MappedArray should use the same
+        input (True). None option automatically detects if arguments share
+        same input. If so, inputs are combined.
+    '''
+    return add(x1, -x2, combine_input=combine_input)
 
 
 def dot(map, input, offset=None):
@@ -187,12 +248,23 @@ def dot(map, input, offset=None):
         if input.linear_map is None:
             new_array.linear_map = map
         else:
-            new_array.linear_map = map.dot(input.linear_map)
+            if type(map) is not np.ndarray and type(input.linear_map) is not np.ndarray \
+                or type(map) is np.ndarray and type(input.linear_map) is np.ndarray:    # if both sparse or both dense, just multiply
+                new_array.linear_map = map.dot(input.linear_map)
+            else:   # make sure the input is dense so the types work out in dot (just can't have a dense map and sparse input)
+                input_linear_map = input.linear_map.copy()
+                if type(input.linear_map) is not np.ndarray:
+                    input_linear_map = input_linear_map.toarray()
+                new_array.linear_map = map.dot(input_linear_map)
+
+        input_offset_map = input.offset_map
+        if type(input.offset_map) is int or type(input.offset_map) is float:
+            input_offset_map = np.ones(input.shape)*input.offset_map
 
         if offset is not None and offset is not None:
-            new_array.offset_map = map.dot(input.offset_map) + offset
+            new_array.offset_map = map.dot(input_offset_map) + offset
         elif input.offset_map is not None:
-            new_array.offset_map = map.dot(input.offset_map)
+            new_array.offset_map = map.dot(input_offset_map)
         elif offset is not None:
             new_array.offset_map = offset
         #Else new_array.offset_map = None
@@ -328,7 +400,7 @@ def linear_combination(start, stop, num_steps=50, start_weights=None, stop_weigh
     return new_array
 
 
-def linspace(start, stop, num_steps=50, combine_input=None, offset=None):
+def linspace(start, stop, num_steps:int=50, combine_input:bool=None, offset=None):
     '''
     Perform a linear combintation between two arrays.
     The input is the input of the start array vertically stacked with the input
@@ -379,14 +451,14 @@ def _num_elements(x):
     else:
         return np.cumprod(x.shape[:-1])[-1]
 
-def _arrays_are_equal(a, b):
+def _arrays_are_equal(a:np.ndarray, b:np.ndarray):
     difference = a - b
     if np.any(difference):
         return False
     else:
         return True
 
-def _check_whether_to_combine_inputs(input1, input2):
+def _check_whether_to_combine_inputs(input1:MappedArray, input2:MappedArray):
     if _arrays_are_equal(input1.input, input2.input):
         return True
     else:
