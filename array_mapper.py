@@ -1,5 +1,6 @@
 import numpy as np
 import scipy.sparse as sps
+import scipy
 
 def array(input=None, linear_map=None, offset=None, shape=None):
     '''
@@ -7,8 +8,14 @@ def array(input=None, linear_map=None, offset=None, shape=None):
 
     Parameters
     ----------
-    object: array_like
-        The value of the MappedArray
+    input: array_like
+        The input into the map to calculate the array
+
+    linear_map: numpy.ndarray or scipy.sparse matrix
+        Linear map for evaluating the array
+    
+    offset: numpy.ndarray
+        Offset for evaluating the array
 
     shape: tuple
         The shape of the MappedArray
@@ -17,7 +24,23 @@ def array(input=None, linear_map=None, offset=None, shape=None):
 
 
 class MappedArray:
-    ''' Sketch of MappedArray class for purpose of developing sample run script '''
+    '''
+    An instance of a MappedArray object. This is an array that stores an affine mapping to calculate itself
+
+    Parameters
+    ----------
+    input: array_like
+        The input into the map to calculate the array
+
+    linear_map: numpy.ndarray or scipy.sparse matrix
+        Linear map for evaluating the array
+    
+    offset: numpy.ndarray
+        Offset for evaluating the array
+
+    shape: tuple
+        The shape of the MappedArray
+    '''
     
     def __init__(self, input=None, linear_map=None, offset=None, shape=None) -> None:
         '''
@@ -26,7 +49,13 @@ class MappedArray:
         Parameters
         ----------
         input: array_like
-            The value of the MappedArray
+            The input into the map to calculate the array
+
+        linear_map: numpy.ndarray or scipy.sparse matrix
+            Linear map for evaluating the array
+        
+        offset: numpy.ndarray
+            Offset for evaluating the array
 
         shape: tuple
             The shape of the MappedArray
@@ -125,6 +154,8 @@ class MappedArray:
             if type(input) is MappedArray:
                 new_array = dot(self.linear_map, input, offset=self.offset_map)
                 return new_array.value
+            # elif type(input) is CSDLVariable:
+            #     return csdl_variable_with_csdl_operation_done
             else:
                 self.input = input
         if self.linear_map is not None and self.offset_map is not None:
@@ -139,9 +170,189 @@ class MappedArray:
         self.value = self.value.reshape(self.shape)
 
         return self.value
+    
+
+# class NonlinearMappedArray:    
+#     def __init__(self, input=None, linear_map=None, offset=None, shape=None) -> None:
+#         '''
+#         Creates an instance of a NonlinearMappedArray object.
+
+#         Parameters
+#         ----------
+#         input: array_like
+#             The value of the MappedArray
+
+#         shape: tuple
+#             The shape of the MappedArray
+#         '''
+        
+#         # Listing list of attributes
+#         self.input = input
+#         self.linear_map = linear_map
+#         self.offset_map = offset
+#         self.shape = shape
+#         self.value = None
+
+#         if type(input) is np.ndarray:
+#             self.input = input
+#             self.value = input
+#             self.shape = input.shape
+#         elif type(input) is list or type(input) is tuple:
+#             self.input = np.array(input)
+#             self.value = np.array(input)
+#             self.shape = np.array(input).shape
+#         elif type(input) is MappedArray and linear_map is not None:
+#             raise Exception("Can't instantiate the input with a MappedArray while specifying a linear map."
+#             "Please use the array_mapper.dot function.")
+#         elif type(input) is MappedArray:   # Creates a copy of the input MappedArray
+#             self.linear_map = input.linear_map
+#             self.offset_map = input.offset_map
+#             self.shape = input.shape
+#             self.input = input.input
+#             self.value = input.value
+
+#         if self.linear_map is None and self.input is not None:
+#             self.linear_map = sps.eye(self.input.shape[0])
+
+#         if type(shape) is list or type(shape) is tuple:
+#             self.shape = shape
+
+#         self.evaluate()
+
+    # def __str__(self):
+    #     return str(self.value)
+
+    # def __repr__(self):
+    #     return f'array_mapper.MappedArray(input={self.input}, linear_map={self.linear_map}, offset={self.offset_map}, shape={self.shape})'
+
+    # def __pos__(self):
+    #     return self
+
+    # def __neg__(self):
+    #     map = None
+    #     offset = None
+    #     input = self.input
+    #     if self.linear_map is not None:
+    #         map = -self.linear_map
+    #     else:
+    #         input = -self.input
+
+    #     if self.offset_map is not None:
+    #         offset = -self.offset_map
+
+    #     return array(input=input, linear_map=map, offset=offset, shape=self.shape)
+
+    # def __add__(self, x2):
+    #     return add(self, x2)
+
+    # def __radd__(self, x1):
+    #     return add(self, x1)
+
+    # def __sub__(self, x2):
+    #     return add(self, -x2)
+
+    # def __rsub__(self, x1):
+    #     return add(-self, x1)
+
+    # def __mul__(self, alpha):
+    #     map = None
+    #     offset = None
+    #     if self.linear_map is not None:
+    #         map = alpha*self.linear_map
+    #     if self.offset_map is not None:
+    #         offset = alpha*self.offset_map
+
+    #     return array(input=self.input, linear_map=map, offset=offset, shape=self.shape)
+
+    # def __rmul__(self, alpha):
+    #     return self.__mul__(alpha)
+
+    # def __truediv__(self, alpha):
+    #     return self.__mul__(1/alpha)
+
+    # def reshape(self, newshape):
+    #     new_array = MappedArray(input=self.input, linear_map=self.linear_map, offset=self.offset_map, shape=newshape)
+    #     return new_array
+
+    # def evaluate(self, input=None):
+    #     if input is not None:
+    #         if type(input) is MappedArray:
+    #             new_array = dot(self.linear_map, input, offset=self.offset_map)
+    #             return new_array.value
+    #         else:
+    #             self.input = input
+    #     if self.linear_map is not None and self.offset_map is not None:
+    #         self.value = self.linear_map.dot(self.input) + self.offset_map
+    #     elif self.linear_map is not None:
+    #         self.value = self.linear_map.dot(self.input)
+    #     elif self.offset_map is not None:
+    #         self.value = self.input + self.offset_map
+    #     else:
+    #         self.value = self.input
+
+    #     self.value = self.value.reshape(self.shape)
+
+    #     return self.value
 
 
-def add(x1, x2, combine_input:bool=None):
+def vstack(tup:tuple, combinte_inputs:bool=None):
+    '''
+    Stacks a tuple of arrays.
+
+    Note: This function is currently not smart enough to combine inputs for non-adjacent elements in the stack.
+
+    Parameters
+    -----------
+    tup: tuple
+        The tuple of arrays to be stacked
+    combine_inputs: bool
+        If both arguments are MappedArrays, this boolean determines whether
+        the output MappedArray should stack the inputs of x1 and x2 as its
+        input (False), or whether the output MappedArray should use the same
+        input (True). None option automatically detects if arguments share
+        same input. If so, inputs are combined.
+    '''
+
+    num_elements = len(tup)
+    elements = list(tup)
+    combine_inputs_list = []
+    # if any numpy arrays are being stacked, convert them to MappedArrays with Identity map
+    for i in range(num_elements):
+        if type(elements[i]) is np.ndarray:
+            elements[i] = MappedArray(elements[i], shape=elements[i].shape)
+
+    # check whether inputs should be combined for each combination
+    if combinte_inputs is None:
+        for i in range(num_elements-1):
+            combine_inputs_list.append(_check_whether_to_combine_inputs(tup[i], tup[i+1]))
+    
+    for i in range(num_elements-1):
+        element1 = elements[i]
+        element2 = elements[i+1]
+        axis_0_length = element1.shape[0] + element2.shape[0]
+        new_shape = (axis_0_length,) + element1.shape[1:]
+
+        element1_offset_map = element1.offset_map
+        element2_offset_map = element2.offset_map
+        if element1.offset_map is None and element2.offset_map is not None:
+            element1_offset_map = sps.csc_matrix(element1.shape)
+        elif element1.offset_map is not None and element2.offset_map is None:
+            element2_offset_map = sps.csc_matrix(element2.shape)
+        offset_map = _vstack_maps(element1_offset_map, element2_offset_map)
+
+        if combine_inputs_list[i]:
+            linear_map = _vstack_maps(element1.linear_map, element2.linear_map)
+            input = element1.input
+        else:
+            linear_map = _diag_stack_maps(element1.linear_map, element2.linear_map)
+            input = np.append(element1.input, element2.input)
+
+        elements[i+1] = MappedArray(input=input, linear_map=linear_map, offset=offset_map, shape=new_shape)
+
+    return elements[-1]
+
+
+def add(x1, x2, combine_inputs:bool=None):
     '''
     Adds the two arguments.
 
@@ -151,7 +362,7 @@ def add(x1, x2, combine_input:bool=None):
         The first argument being added
     x2: array_like
         The second argument being added
-    combine_input: bool
+    combine_inputs: bool
         If both arguments are MappedArrays, this boolean determines whether
         the output MappedArray should stack the inputs of x1 and x2 as its
         input (False), or whether the output MappedArray should use the same
@@ -161,17 +372,17 @@ def add(x1, x2, combine_input:bool=None):
     if type(x1) is not MappedArray and type(x2) is not MappedArray:
         return x1 + x2
     elif type(x1) is not MappedArray:
-        return add(x2=x2, x1=x1, combine_input=combine_input)
+        return add(x2=x2, x1=x1, combine_inputs=combine_inputs)
 
     map = None
     offset_map = None
     input = None
 
     if type(x2) is MappedArray:
-        combine_input = _check_whether_to_combine_inputs(x1, x2)
+        combine_inputs = _check_whether_to_combine_inputs(x1, x2)
 
         # if x1.linear_map is not None and x2.linear_map is not None:
-        if combine_input:
+        if combine_inputs:
             map = x1.linear_map + x2.linear_map
         else:
             if type(x1.linear_map) is np.ndarray or x2.linear_map is np.ndarray:
@@ -187,7 +398,7 @@ def add(x1, x2, combine_input:bool=None):
         elif x2.offset_map is not None:
             offset_map = x2.offset_map
 
-        if combine_input:
+        if combine_inputs:
             input = x1.input
         else:
             if len(x1.input.shape) == 1:
@@ -218,14 +429,14 @@ def subtract(x1, x2, combine_inputs:bool=None):
         The first argument being added
     x2: array_like
         The second argument being added
-    combine_input: bool
+    combine_inputs: bool
         If both arguments are MappedArrays, this boolean determines whether
         the output MappedArray should stack the inputs of x1 and x2 as its
         input (False), or whether the output MappedArray should use the same
         input (True). None option automatically detects if arguments share
         same input. If so, inputs are combined.
     '''
-    return add(x1, -x2, combine_input=combine_input)
+    return add(x1, -x2, combine_inputs=combine_inputs)
 
 
 def dot(map, input, offset=None):
@@ -240,6 +451,9 @@ def dot(map, input, offset=None):
     input: array_like
         The input array.
     '''
+    if type(map) is MappedArray:
+        map = map.value    # NOTE: This is throwing away previous computations becase that would be nonlinear.
+
     new_array = MappedArray(input=input)
 
     if type(input) is np.ndarray or type(input) is sps._csc.csc_matrix:
@@ -311,12 +525,12 @@ def matvec(map, input):
 
 
 
-def linear_combination(start, stop, num_steps=50, start_weights=None, stop_weights=None, combine_input=None, offset=None):
+def linear_combination(start, stop, num_steps=50, start_weights=None, stop_weights=None, combine_inputs=None, offset=None):
     '''
     Perform a linear combintation between two arrays.
     The input is the input of the start array vertically stacked with the input
     of the stop array unless if the inputs are combined. The inputs are
-    combined if combine_input=True or if combine_input=None and the start and
+    combined if combine_inputs=True or if combine_inputs=None and the start and
     stop have the same input.
 
     Parameters
@@ -336,7 +550,7 @@ def linear_combination(start, stop, num_steps=50, start_weights=None, stop_weigh
     stop_weights: array_like
         The weights on the stop input for the linear combination.
 
-    combine_input : boolean
+    combine_inputs : boolean
         A boolean on whether the two inputs share their inputs. If so, the inputs are merged for this array.
 
     offset: np.ndarray
@@ -352,7 +566,7 @@ def linear_combination(start, stop, num_steps=50, start_weights=None, stop_weigh
 
     # if they specify num_steps and not weights, call linspace which will call this func with even weights.
     if num_steps is not None and start_weights is None and stop_weights is None:
-        linspace(start, stop, num_steps, combine_input, offset)
+        linspace(start, stop, num_steps, combine_inputs, offset)
 
     # num_per_step = start.value.shape[0]
     num_per_step = _num_elements(start.value)
@@ -376,11 +590,11 @@ def linear_combination(start, stop, num_steps=50, start_weights=None, stop_weigh
     mapped_start_array = dot(map_start, flattened_start)
     mapped_stop_array = dot(map_stop, flattened_stop)
     
-    if combine_input is None:
-        combine_input = _check_whether_to_combine_inputs(start, stop)
+    if combine_inputs is None:
+        combine_inputs = _check_whether_to_combine_inputs(start, stop)
     
     offset_map = None
-    if combine_input:
+    if combine_inputs:
         map = mapped_start_array.linear_map + mapped_stop_array.linear_map
         if offset is not None:
             offset_map = mapped_start_array.offset_map + mapped_stop_array.offset_map
@@ -400,12 +614,12 @@ def linear_combination(start, stop, num_steps=50, start_weights=None, stop_weigh
     return new_array
 
 
-def linspace(start, stop, num_steps:int=50, combine_input:bool=None, offset=None):
+def linspace(start, stop, num_steps:int=50, combine_inputs:bool=None, offset=None):
     '''
     Perform a linear combintation between two arrays.
     The input is the input of the start array vertically stacked with the input
     of the stop array unless if the inputs are combined. The inputs are
-    combined if combine_input=True or if combine_input=None and the start and
+    combined if combine_inputs=True or if combine_inputs=None and the start and
     stop have the same input.
 
     Parameters
@@ -419,7 +633,7 @@ def linspace(start, stop, num_steps:int=50, combine_input:bool=None, offset=None
     num_steps: int
         The number of steps in the combination.
 
-    combine_input : boolean
+    combine_inputs : boolean
         A boolean on whether the two inputs share their inputs. If so, the inputs are merged for this array.
 
     offset: np.ndarray
@@ -440,14 +654,14 @@ def linspace(start, stop, num_steps:int=50, combine_input:bool=None, offset=None
     start_weights = 1 - stop_weights
 
     return linear_combination(start, stop, num_steps=num_steps,
-            start_weights=start_weights, stop_weights=stop_weights, combine_input=combine_input, 
+            start_weights=start_weights, stop_weights=stop_weights, combine_inputs=combine_inputs, 
             offset=offset)
 
 
 
 def _num_elements(x):
     if len(x.shape) == 1 :
-        return 1
+        return x.shape[0]
     else:
         return np.cumprod(x.shape[:-1])[-1]
 
@@ -462,7 +676,34 @@ def _check_whether_to_combine_inputs(input1:MappedArray, input2:MappedArray):
     if _arrays_are_equal(input1.input, input2.input):
         return True
     else:
-        return False 
+        return False
+    
+def _vstack_maps(map1, map2):
+    if map1 is None and map2 is None:
+        return None
+
+    if type(map1) is np.ndarray and type(map2) is np.ndarray:
+        return np.vstack((map1,map2))
+    elif sps.isspmatrix(map1) and sps.isspmatrix(map2):
+        return sps.vstack((map1,map2))
+    elif type(map1) is np.ndarray and sps.isspmatrix(map2):
+        return np.vstack((map1, map2.toarray()))
+    elif sps.isspmatrix(map1) and type(map2) is np.ndarray:
+        return np.vstack((map1.toarray(), map2))
+    else:
+        return Exception("Array Mapper is trying to vertically stack maps that aren't numpy arrays or scipy sparse matrices")
+    
+def _diag_stack_maps(map1, map2):
+    if type(map1) is np.ndarray and type(map2) is np.ndarray:
+        return scipy.linalg.block_diag(map1,map2)
+    elif sps.isspmatrix(map1) and sps.isspmatrix(map2):
+        return sps.block_diag((map1,map2))
+    elif type(map1) is np.ndarray and sps.isspmatrix(map2):
+        return scipy.linalg.block_diag(map1, map2.toarray())
+    elif sps.isspmatrix(map1) and type(map2) is np.ndarray:
+        return scipy.linalg.block_diag(map1.toarray(), map2)
+    else:
+        return Exception("Array Mapper is trying to diagonally stack maps that aren't numpy arrays or scipy sparse matrices")
 
 
 if __name__ == "__main__":
@@ -497,6 +738,9 @@ if __name__ == "__main__":
     print('d2_numpy_check', np.linalg.norm(d.evaluate(input2) - map2.dot(map).dot(input2)))
 
 
-    f = linspace(a, b, num_steps=8, combine_input=None)
+    f = linspace(a, b, num_steps=8, combine_inputs=None)
     print('array_mapper linspace: ', f)
     print('linspace_numpy_check', np.linalg.norm(f.value - np.linspace(input, np.dot(map, input), num=8)))
+
+    g = vstack((b,c))
+    print('array_mapper vstack', g)
