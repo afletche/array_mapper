@@ -1,8 +1,10 @@
 import numpy as np
 import scipy.sparse as sps
 import scipy
+import csdl
+from python_csdl_backend import Simulator
 
-def array(input=None, linear_map=None, offset=None, shape=None):
+def array(input=None, linear_map=None, offset=None, shape:tuple=None):
     '''
     Creates a MappedArray.
 
@@ -42,7 +44,7 @@ class MappedArray:
         The shape of the MappedArray
     '''
     
-    def __init__(self, input=None, linear_map=None, offset=None, shape=None) -> None:
+    def __init__(self, input=None, linear_map=None, offset=None, shape:tuple=None) -> None:
         '''
         Creates an instance of a MappedArray object.
 
@@ -172,62 +174,68 @@ class MappedArray:
         return self.value
     
 
-# class NonlinearMappedArray:    
-#     def __init__(self, input=None, linear_map=None, offset=None, shape=None) -> None:
-#         '''
-#         Creates an instance of a NonlinearMappedArray object.
 
-#         Parameters
-#         ----------
-#         input: array_like
-#             The value of the MappedArray
+class CSDLEvaluationModel(csdl.Model):
+    '''
+    Creates a CSDL model that can take in a hanging input.
+    '''
 
-#         shape: tuple
-#             The shape of the MappedArray
-#         '''
+    def initialize(self):
+        self.parameters.declare('csdl_model')
+        self.parameters.declare('input')
+
+    def define(self):
+        csdl_model = self.parameters['csdl_model']
+        input = self.parameters['input']
+
+        if input is not None:
+            self.create_input('input', val=input)
+        self.add(submodel=csdl_model, name='csdl_model')
+    
+
+class NonlinearMappedArray:
+    '''
+    A NonlinearMappedArray object. This map can be nonlinear.
+
+    Parameters
+    ----------
+    input: {np.ndarray, MappedArray}
+        The input to the nonlinear map to calculate this array
+
+    csdl_model: csdl.Model
+        A CSDL model that contains the nonlinear mapping. The CSDL model must have a declare_variable("input",...) and outputs "output"
+    '''
+    
+    def __init__(self, input=None, csdl_model:csdl.Model=None) -> None:
+        '''
+        Creates an instance of a NonlinearMappedArray object.
+
+        Parameters
+        ----------
+        input: {np.ndarray, MappedArray}
+            The input to the nonlinear map to calculate this array
+
+        csdl_model: csdl.Model
+            A CSDL model that contains the nonlinear mapping. The CSDL model must have a declare_variable("input",...) and outputs "output"
+        '''
         
-#         # Listing list of attributes
-#         self.input = input
-#         self.linear_map = linear_map
-#         self.offset_map = offset
-#         self.shape = shape
-#         self.value = None
+        # Listing list of attributes
+        self.input = input
+        self.csdl_model = csdl_model
+        self.value = None
 
-#         if type(input) is np.ndarray:
-#             self.input = input
-#             self.value = input
-#             self.shape = input.shape
-#         elif type(input) is list or type(input) is tuple:
-#             self.input = np.array(input)
-#             self.value = np.array(input)
-#             self.shape = np.array(input).shape
-#         elif type(input) is MappedArray and linear_map is not None:
-#             raise Exception("Can't instantiate the input with a MappedArray while specifying a linear map."
-#             "Please use the array_mapper.dot function.")
-#         elif type(input) is MappedArray:   # Creates a copy of the input MappedArray
-#             self.linear_map = input.linear_map
-#             self.offset_map = input.offset_map
-#             self.shape = input.shape
-#             self.input = input.input
-#             self.value = input.value
+        self.evaluate()
 
-#         if self.linear_map is None and self.input is not None:
-#             self.linear_map = sps.eye(self.input.shape[0])
+    def __str__(self):
+        return str(self.value)
 
-#         if type(shape) is list or type(shape) is tuple:
-#             self.shape = shape
+    def __repr__(self):
+        return f'array_mapper.NonlinearMappedArray(input={self.input}, csdl_model={self.csdl_model})'
 
-#         self.evaluate()
+    def __pos__(self):
+        return self
 
-    # def __str__(self):
-    #     return str(self.value)
-
-    # def __repr__(self):
-    #     return f'array_mapper.MappedArray(input={self.input}, linear_map={self.linear_map}, offset={self.offset_map}, shape={self.shape})'
-
-    # def __pos__(self):
-    #     return self
-
+    # TODO: It seems like it should add a *-1 operation to end of CSDL model
     # def __neg__(self):
     #     map = None
     #     offset = None
@@ -242,6 +250,7 @@ class MappedArray:
 
     #     return array(input=input, linear_map=map, offset=offset, shape=self.shape)
 
+    # TODO add addition operation to CSDL model
     # def __add__(self, x2):
     #     return add(self, x2)
 
@@ -270,29 +279,43 @@ class MappedArray:
     # def __truediv__(self, alpha):
     #     return self.__mul__(1/alpha)
 
+    # TODO this adds a reshape operation to the CSDL model
     # def reshape(self, newshape):
     #     new_array = MappedArray(input=self.input, linear_map=self.linear_map, offset=self.offset_map, shape=newshape)
     #     return new_array
 
-    # def evaluate(self, input=None):
-    #     if input is not None:
-    #         if type(input) is MappedArray:
-    #             new_array = dot(self.linear_map, input, offset=self.offset_map)
-    #             return new_array.value
-    #         else:
-    #             self.input = input
-    #     if self.linear_map is not None and self.offset_map is not None:
-    #         self.value = self.linear_map.dot(self.input) + self.offset_map
-    #     elif self.linear_map is not None:
-    #         self.value = self.linear_map.dot(self.input)
-    #     elif self.offset_map is not None:
-    #         self.value = self.input + self.offset_map
-    #     else:
-    #         self.value = self.input
+    def evaluate(self, input=None):
+        '''
+        Evaluate the value given an input. If the stored input is a MappedArray, the MappedArray is evaluated using the supplied input
+        '''
+        if type(self.input) is MappedArray:
+            self.input.evaluate(input)
+            input = self.input.value
+        elif input is None and self.input is not None:
+            input = self.input
+        elif input is None and self.input is None:
+            return
+        elif type(input) is MappedArray:
+            input.evaluate()
+            input = input.value
+            self.input = input
 
-    #     self.value = self.value.reshape(self.shape)
+        evaluation_model = CSDLEvaluationModel(csdl_model=self.csdl_model, input=input)
 
-    #     return self.value
+        sim = Simulator(evaluation_model)
+        sim.run()
+
+        self.value = sim['output']
+        self.shape = self.value.shape
+
+        return self.value
+    
+    # TODO: Implement these so they can be used for design geometry optimization
+    # def evaluate_first_derivative(self,input):
+    #     pass
+
+    # def evaluate_second_derivative(self,input):
+    #     pass
 
 
 def vstack(tup:tuple, combinte_inputs:bool=None):
@@ -659,6 +682,43 @@ def linspace(start, stop, num_steps:int=50, combine_inputs:bool=None, offset=Non
 
 
 
+class NormModel(csdl.Model):
+    def initialize(self):
+        self.parameters.declare('x')
+        self.parameters.declare('ord')
+        self.parameters.declare('axes')
+
+    def define(self):
+        x = self.parameters['x']
+        ord = self.parameters['ord']
+        axes = self.parameters['axes']
+        input_csdl = self.declare_variable('input', shape=x.shape)
+        if len(x.shape) == len(axes):
+            self.register_output('output', csdl.pnorm(input_csdl, pnorm_type=ord))
+        else:
+            self.register_output('output', csdl.pnorm(input_csdl, axis=axes, pnorm_type=ord))
+
+def norm(x, ord=2, axes:tuple=(-1,)):
+    '''
+    x: {MappedArray, NonlinearMappedArray}
+        The array that is the input to the norm
+
+    ord: {non-zero int, inf, -inf, "fro", "nuc"}, optional
+        Order of the norm (in a p-norm sense)
+
+    axis: int
+        axis along which the norm will be taken
+    '''
+    # norm_model = csdl.Model()
+    # input_csdl = norm_model.declare_variable('input', shape=x.shape)
+    # norm_model.register_output('output', csdl.pnorm(input_csdl, pnorm_type=ord))
+
+    # NOTE: need to account for operations that happen in input
+    # nonlinear_mapped_array = NonlinearMappedArray(input=x, csdl_model=norm_model)
+    nonlinear_mapped_array = NonlinearMappedArray(input=x, csdl_model=NormModel(x=x, ord=ord, axes=axes))
+    return nonlinear_mapped_array
+
+
 def _num_elements(x):
     if len(x.shape) == 1 :
         return x.shape[0]
@@ -744,3 +804,20 @@ if __name__ == "__main__":
 
     g = vstack((b,c))
     print('array_mapper vstack', g)
+
+    h0 = c-d/10
+    print('c-d/10', h0)
+    h = norm(h0)
+    print('norm(c-d/10)', h)
+    print('norm numpy check 1', np.linalg.norm(h0.value) - h.value)
+    new_input_c = b.value/8
+    new_input_d = d.input/2
+    new_input = np.append(new_input_c, new_input_d)
+    h.evaluate(new_input)
+    print('new c-d/10', h0.evaluate(new_input))
+    print('new norm(c-d/10)', h)
+    print('norm numpy check after new evaluation', np.linalg.norm(h0.value) - h.value)
+    i = np.arange(6).reshape((2,3))
+    print('i', i)
+    print('norm(i)', norm(i, ord=2, axes=(0,1)))
+
