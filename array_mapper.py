@@ -206,7 +206,7 @@ class NonlinearMappedArray:
         A CSDL model that contains the nonlinear mapping. The CSDL model must have a declare_variable("input",...) and outputs "output"
     '''
     
-    def __init__(self, input=None, csdl_model:csdl.Model=None) -> None:
+    def __init__(self, input=None, csdl_model:csdl.Model=None, derivative_csdl_model:csdl.Model=None) -> None:
         '''
         Creates an instance of a NonlinearMappedArray object.
 
@@ -222,9 +222,12 @@ class NonlinearMappedArray:
         # Listing list of attributes
         self.input = input
         self.csdl_model = csdl_model
+        self.derivative_csdl_model = derivative_csdl_model
         self.value = None
+        self.derivative = None
 
         self.evaluate()
+        self.evaluate_derivative()
 
     def __str__(self):
         return str(self.value)
@@ -310,10 +313,35 @@ class NonlinearMappedArray:
 
         return self.value
     
-    # TODO: Implement these so they can be used for design geometry optimization
-    # def evaluate_first_derivative(self,input):
-    #     pass
+    def evaluate_derivative(self, input=None):
+        '''
+        Evaluate the derivate given an input. If the stored input is a MappedArray, the MappedArray is evaluated using the supplied input
+        '''
+        if type(self.input) is MappedArray:
+            self.input.evaluate(input)
+            input = self.input.value
+        elif input is None and self.input is not None:
+            input = self.input
+        elif input is None and self.input is None:
+            return
+        elif type(input) is MappedArray:
+            input.evaluate()
+            input = input.value
+            self.input = input
 
+        evaluation_model = CSDLEvaluationModel(csdl_model=self.derivative_csdl_model, input=input)
+
+        sim = Simulator(evaluation_model)
+        sim.run()
+
+        if type(self.input) is MappedArray:
+            self.derivative = sim['output'].dot(self.input.linear_map)
+        else:
+            self.derivative = sim['output']
+
+        return self.derivative
+
+    # TODO: Implement this so it can be used for design geometry optimization
     # def evaluate_second_derivative(self,input):
     #     pass
 
@@ -698,6 +726,24 @@ class NormModel(csdl.Model):
         else:
             self.register_output('output', csdl.pnorm(input_csdl, axis=axes, pnorm_type=ord))
 
+class NormDerivativeModel(csdl.Model):
+    def initialize(self):
+        self.parameters.declare('x')
+        self.parameters.declare('ord')
+        self.parameters.declare('axes')
+
+    def define(self):
+        x = self.parameters['x']
+        ord = self.parameters['ord']
+        axes = self.parameters['axes']
+        input_csdl = self.declare_variable('input', shape=x.shape)
+        if len(x.shape) == len(axes):
+            norm = csdl.pnorm(input_csdl, pnorm_type=ord)
+        else:
+            norm = csdl.pnorm(input_csdl, axis=axes, pnorm_type=ord)
+        norm_expanded = csdl.expand(norm, shape=x.shape, indices='i->ji')
+        self.register_output('output', input_csdl/norm_expanded)
+
 def norm(x, ord=2, axes:tuple=(-1,)):
     '''
     x: {MappedArray, NonlinearMappedArray}
@@ -709,13 +755,10 @@ def norm(x, ord=2, axes:tuple=(-1,)):
     axis: int
         axis along which the norm will be taken
     '''
-    # norm_model = csdl.Model()
-    # input_csdl = norm_model.declare_variable('input', shape=x.shape)
-    # norm_model.register_output('output', csdl.pnorm(input_csdl, pnorm_type=ord))
-
     # NOTE: need to account for operations that happen in input
     # nonlinear_mapped_array = NonlinearMappedArray(input=x, csdl_model=norm_model)
-    nonlinear_mapped_array = NonlinearMappedArray(input=x, csdl_model=NormModel(x=x, ord=ord, axes=axes))
+    nonlinear_mapped_array = NonlinearMappedArray(input=x, csdl_model=NormModel(x=x, ord=ord, axes=axes), 
+                                                        derivative_csdl_model=NormDerivativeModel(x=x, ord=ord, axes=axes))
     return nonlinear_mapped_array
 
 
@@ -810,6 +853,7 @@ if __name__ == "__main__":
     h = norm(h0)
     print('norm(c-d/10)', h)
     print('norm numpy check 1', np.linalg.norm(h0.value) - h.value)
+    print('derivative of norm(c-d/10)', h.derivative)
     new_input_c = b.value/8
     new_input_d = d.input/2
     new_input = np.append(new_input_c, new_input_d)
@@ -817,7 +861,12 @@ if __name__ == "__main__":
     print('new c-d/10', h0.evaluate(new_input))
     print('new norm(c-d/10)', h)
     print('norm numpy check after new evaluation', np.linalg.norm(h0.value) - h.value)
+    h.evaluate_derivative(new_input)
+    print('new derivative of norm(c-d/10)', h.derivative)
+
     i = np.arange(6).reshape((2,3))
     print('i', i)
-    print('norm(i)', norm(i, ord=2, axes=(0,1)))
+    j = norm(i, ord=2, axes=(0,1))
+    print('norm(i)', j)
+    print('derivative of norm(i)', j.derivative)
 
