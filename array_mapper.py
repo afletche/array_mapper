@@ -204,6 +204,10 @@ class NonlinearMappedArray:
 
     csdl_model: csdl.Model
         A CSDL model that contains the nonlinear mapping. The CSDL model must have a declare_variable("input",...) and outputs "output"
+
+    derivative_csdl_model: csdl.Model
+        A CSDL model that contains the derivative of the nonlinear mapping.
+        The derivative CSDL model must have a declare_variable("input",...) and outputs "output"
     '''
     
     def __init__(self, input=None, csdl_model:csdl.Model=None, derivative_csdl_model:csdl.Model=None) -> None:
@@ -746,7 +750,11 @@ class NormDerivativeModel(csdl.Model):
 
 def norm(x, ord=2, axes:tuple=(-1,)):
     '''
-    x: {MappedArray, NonlinearMappedArray}
+    Calculates the p-norm of the input array
+
+    Parameters
+    -----------
+    x: {np.ndarray, MappedArray}
         The array that is the input to the norm
 
     ord: {non-zero int, inf, -inf, "fro", "nuc"}, optional
@@ -759,6 +767,27 @@ def norm(x, ord=2, axes:tuple=(-1,)):
     # nonlinear_mapped_array = NonlinearMappedArray(input=x, csdl_model=norm_model)
     nonlinear_mapped_array = NonlinearMappedArray(input=x, csdl_model=NormModel(x=x, ord=ord, axes=axes), 
                                                         derivative_csdl_model=NormDerivativeModel(x=x, ord=ord, axes=axes))
+    return nonlinear_mapped_array
+
+
+def custom_nonlinear_operation(input, csdl_model, derivative_csdl_model):
+    '''
+    Performs a custom operation defined by the csdl model. Derivative CSDL model is noecessary for computing derivatives.
+
+    Parameters
+    ----------
+    input: {np.ndarray, MappedArray}
+        The input to the nonlinear map to calculate this array
+
+    csdl_model: csdl.Model
+        A CSDL model that contains the nonlinear mapping. The CSDL model must have a declare_variable("input",...) and outputs "output"
+
+    derivative_csdl_model: csdl.Model
+        A CSDL model that contains the derivative of the nonlinear mapping.
+        The derivative CSDL model must have a declare_variable("input",...) and outputs "output"
+    '''
+    nonlinear_mapped_array = NonlinearMappedArray(input=input, csdl_model=csdl_model,
+                                                        derivative_csdl_model=derivative_csdl_model)
     return nonlinear_mapped_array
 
 
