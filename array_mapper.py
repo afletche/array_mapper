@@ -619,11 +619,15 @@ def linear_combination(start, stop, num_steps=50, start_weights=None, stop_weigh
     # TODO Add checking to make sure function inputs are correct sizes.
     # TODO They can't specify num_steps and weights.
 
+    if type(start) is np.ndarray:
+        start = MappedArray(start)
+    if type(stop) is np.ndarray:
+        stop = MappedArray(stop)
+
     # if they specify num_steps and not weights, call linspace which will call this func with even weights.
     if num_steps is not None and start_weights is None and stop_weights is None:
         linspace(start, stop, num_steps, combine_inputs, offset)
 
-    # num_per_step = start.value.shape[0]
     num_per_step = _num_elements(start.value)
     map_num_outputs = num_steps*num_per_step
     map_num_inputs = num_per_step
@@ -660,7 +664,10 @@ def linear_combination(start, stop, num_steps=50, start_weights=None, stop_weigh
         if offset is not None:
             offset_map = np.vstack((mapped_start_array.offset_map, mapped_stop_array.offset_map)) + offset # TODO probably need to type-check between numpy and scipy
             # Also TODO: consider storing a sparse matrix of zeros for offsets instead of none to make logic gates easier to work around.
-        input = np.vstack((start.input, stop.input))
+        if len(start.shape) == 1:
+            input = np.append(start.input, stop.input)
+        else:
+            input = np.vstack((start.input, stop.input))
 
     new_shape = (num_steps,) + tuple(start.shape)
 
