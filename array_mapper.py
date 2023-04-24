@@ -232,6 +232,9 @@ class NonlinearMappedArray:
 
         self.evaluate()
         self.evaluate_derivative()
+        if derivative_csdl_model is not None:
+            # self.evaluate_second_derivative()
+            pass
 
     def __str__(self):
         return str(self.value)
@@ -333,15 +336,31 @@ class NonlinearMappedArray:
             input = input.value
             self.input = input
 
-        evaluation_model = CSDLEvaluationModel(csdl_model=self.derivative_csdl_model, input=input)
+        evaluation_model = CSDLEvaluationModel(csdl_model=self.csdl_model, input=input)
 
         sim = Simulator(evaluation_model)
         sim.run()
+        derivative = sim.compute_totals('output', 'input')[('output', 'input')]
 
         if type(self.input) is MappedArray:
-            self.derivative = sim['output'].dot(self.input.linear_map)
+            linear_map = self.input.linear_map.copy()
+            if sps.issparse(linear_map):
+                linear_map = linear_map.toarray()
+            if len(self.input.input.shape) > 1:     # if input is not a vector, need to flatten copy and flatten maps
+                # for example, a MappedArray with input (10,3) and map (2,10) is reformatted to have input (30,) and map (2,10) --copy--> (2,3,10,3) --reshape--> (6,30)
+                num_copies = np.cumprod(self.input.input.shape[1:])[-1]
+                linear_map_expanded = np.zeros((linear_map.shape[0], num_copies, linear_map.shape[1], num_copies))
+                # Expand matrix into equivalent tensor with identity along new axes (is there a non-for-loop way to do this?)
+                for i in range(num_copies):
+                    linear_map_expanded[:,i,:,i] = linear_map
+                linear_map = linear_map_expanded.reshape((linear_map.shape[0]*num_copies, linear_map.shape[1]*num_copies))
+
+            # if sps.issparse(self.input.linear_map):
+            #     self.derivative = derivative.dot(self.input.linear_map.toarray())
+            # else:
+            self.derivative = derivative.dot(linear_map)
         else:
-            self.derivative = sim['output']
+            self.derivative = derivative
 
         return self.derivative
 
@@ -777,7 +796,7 @@ def norm(x, ord=2, axes:tuple=(-1,)):
     return nonlinear_mapped_array
 
 
-def custom_nonlinear_operation(input, csdl_model, derivative_csdl_model):
+def custom_nonlinear_operation(input, csdl_model, derivative_csdl_model=None):
     '''
     Performs a custom operation defined by the csdl model. Derivative CSDL model is noecessary for computing derivatives.
 
@@ -902,7 +921,17 @@ if __name__ == "__main__":
 
     i = np.arange(6).reshape((2,3))
     print('i', i)
-    j = norm(i, ord=2, axes=(0,1))
+    j = norm(i, ord=2, axes=(1,))
     print('norm(i)', j)
     print('derivative of norm(i)', j.derivative)
 
+    k1_input = np.arange(15).reshape((5,3))
+    k1_map = np.arange(10).reshape((2,5))
+    k1 = dot(k1_map, k1_input)
+    k2_input = np.arange(15).reshape((5,3))/2
+    k2_map = np.arange(0,20,2).reshape((2,5))/2
+    k2 = dot(k2_map, k2_input)
+    k = k1 - k2
+    l = norm(k, ord=2, axes=(1,))
+    print('norm(c-d)', l)
+    print('derivative of norm(c-d)', l.derivative)
