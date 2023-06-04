@@ -170,6 +170,7 @@ class MappedArray:
             self.value = self.input
 
         self.value = self.value.reshape(self.shape)
+        self.shape = self.value.shape   # this is so the -1 isn't stored in the shape
 
         return self.value
     
